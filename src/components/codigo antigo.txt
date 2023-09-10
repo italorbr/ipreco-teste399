@@ -1,0 +1,270 @@
+_______________________________________________________________
+
+import {View, Text, SafeAreaView, Image, TouchableOpacity} from 'react-native';
+import {launchImageLibrary} from 'react-native-image-picker';
+import React, {useState} from 'react';
+
+export default function Banco () {
+  const [selectImage, setSelectImage] = useState('');
+  const ImagePicker = () =>{
+    let options = {
+      storageOptions: {
+        path: "image",
+      },
+    };
+
+    launchImageLibrary(options, response => {
+      setSelectImage(response.assets[0].uri);
+      console.log(response.assets[0].uri);
+    });
+  };
+
+  return(
+    <SafeAreaView style={{flex: 1}}>
+      <View style={{height: 400, width: '100%'}}>
+        <Image style={{height: 400, width: '100%'}} source={{uri: selectImage}}/>
+      </View>
+
+      <TouchableOpacity 
+      onPress={() => {
+        ImagePicker();
+      }}
+      style={{
+        marginTop: 20,
+        height: 50,
+        width: '70%',
+        backgroundColor: 'skyblue',
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        alignSelf: 'center',
+      }}
+      >
+        <Text>GALERIA</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
+  )
+}
+_______________________________________________________________
+
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  ActivityIndicator,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Text,
+} from 'react-native';
+import { Camera, useCameraDevices } from 'react-native-vision-camera';
+import firebase from 'firebase/compat';
+
+type ItemData = {
+  imageName: string;
+  imageUrl: string;
+}
+
+const CameraComponent: React.FC = () => {
+  const devices = useCameraDevices();
+  const device = devices.back;
+  const camera = useRef<Camera | null>(null);
+  const [imageData, setImageData] = useState<string>('');
+  const [takePhotoClicked, setTakePhotoClicked] = useState<boolean>(false);
+
+  useEffect(() => {
+    checkPermission();
+  }, []);
+
+  const checkPermission = async () => {
+    const newCameraPermission = await Camera.requestCameraPermission();
+    console.log(newCameraPermission);
+  };
+
+  if (device == null) return <ActivityIndicator />;
+
+  const takePicture = async () => {
+    if (camera.current != null) {
+      const photo = await camera.current.takePhoto();
+      const storageRef = firebase.storage().ref().child('imagens/' + new Date().toISOString() + '.jpg');
+
+      const response = await fetch(photo.uri);
+      const blob = await response.blob();
+      await storageRef.put(blob);
+
+      const imageURL = await storageRef.getDownloadURL();
+
+      const databaseRef = firebase.database().ref('imagens');
+      databaseRef.push({ imageURL });
+
+      setImageData(photo.path);
+
+      setTakePhotoClicked(false);
+
+      console.log(photo.path);
+      console.log('Imagem URL: ', imageURL)
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, alignContent: 'center', justifyContent: "center" }}>
+      {takePhotoClicked ? (
+        <View style={{ flex: 1 }}>
+          <Camera
+            ref={camera}
+            style={StyleSheet.absoluteFillObject}
+            device={device}
+            isActive={true}
+            photo
+          />
+          <TouchableOpacity
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              backgroundColor: '#ff0037',
+              position: 'absolute',
+              bottom: 50,
+              alignSelf: 'center',
+            }}
+            onPress={() => {
+              takePicture();
+            }}
+          />
+        </View>
+      ) : (
+        <View
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 75 }}
+        >
+          {imageData !== '' && (
+            <Image
+              source={{ uri: 'file://' + imageData }}
+              style={{ width: '130%', height: "55%", transform: [{ rotate: '-90deg' }], // Rotate the image 90 degrees
+            
+            }}
+              
+            />
+          )}
+          <TouchableOpacity
+            style={{
+              width: '90%',
+              height: 50,
+              borderWidth: 1,
+              alignSelf: 'center',
+              borderRadius: 10,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            onPress={() => {
+              setTakePhotoClicked(true);
+            }}
+          ><Text>Tirar foto</Text></TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
+export default CameraComponent;
+
+_______________________________________________________________
+
+import { Button } from "react-native";
+
+import CameraComponent from '../../components/CameraComponent';
+import Home from './Home';
+import Pagina2 from '../outros/Pagina2';
+import Banco from "../../components/Banco";
+
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+
+
+const Stack = createStackNavigator();
+
+export default function Navegar() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerShadowVisible: false,
+          headerTitleStyle: { color: "#f4a100" },
+          headerTitleAlign: "center",
+        }}
+        initialRouteName="Home"
+      >
+        <Stack.Screen
+          name="Pagina inicial"
+          component={Home}
+        />
+        <Stack.Screen
+          options={({ navigation }) => ({
+            headerRight: () => (
+              <Button
+                title="Início"
+                onPress={() => {
+                  navigation.navigate("Pagina inicial");
+                }}
+              />
+            ),
+          })}
+          name="Camera"
+          component={CameraComponent}
+        />
+        <Stack.Screen name="Pagina2" component={Pagina2} />
+        <Stack.Screen name="Banco" component={Banco} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+_______________________________________________________________
+
+import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+
+export default function Home({ navigation }) {
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("Camera")}
+      >
+        <Text style={styles.buttonText}>PAGINA DA CAMERA</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("Pagina2")}
+      >
+        <Text style={styles.buttonText}>PAGINA DA LOCALIZAÇAO</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate("Banco")}
+      >
+        <Text style={styles.buttonText}>PAGINA DO BANCO</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  button: {
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    backgroundColor: "#fff",
+    margin: 20,
+    borderRadius: 10,
+    height: "8%",
+    width: "95%",
+  },
+  buttonText: {
+    color: "black",
+  }
+});
+
+_______________________________________________________________
