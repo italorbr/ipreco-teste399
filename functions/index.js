@@ -1,19 +1,49 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+const path = require('path');
+const os = require('os');
+const spawn = require('child-process-promise').spawn;
+const fs = require('fs');
 
-const {onRequest} = require("firebase-functions/v2/https");
-const logger = require("firebase-functions/logger");
+admin.initializeApp();
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+exports.gerarThumbnail = functions.storage.object().onFinalize(async (object) => {
+  const fileBucket = object.bucket;
+  const filePath = object.name;
+  const contentType = object.contentType;
+  const filename = path.basename(filePath);
+  const dir = path.dirname(filePath);
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+  console.log(fileBucket, filePath, contentType);
+
+  if(!contentType.startsWith("image/")) return console.log("nao eh imagem // comentar depois");
+
+  if(filename.startsWith("thumb_"))
+    return console.log("Imagem já está no formato thumbnail!");
+
+  bucket = admin.storage().bucket(fileBucket);
+  const tempFilePath = path.join(os.tmpdir(), filename);
+  const metadata = {
+    contentType: contentType,
+  }
+  await bucket.file(filePath).download({destination: tempFilePath});
+  console.log('imagem foi para: ', tempFilePath);
+
+  const thumbFileName = `thumb_${filename}`;
+  const thumbFilePath = path.join(dir, thumbFileName);
+  await spawn('convert', [
+    tempFilePath,
+    "-thumbnail",
+    "200x200>",
+    tempFilePath
+  ]);
+  console.log("thumbnail criada aleluia");
+  await bucket.upload(tempFilePath, {
+    destination: thumbFilePath,
+    metadata: metadata,
+  }).then(() => {
+    fs.unlinkSync(tempFilePath);
+  })
+});
+  
+  
